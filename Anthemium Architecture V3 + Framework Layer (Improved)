@@ -1,0 +1,163 @@
+## Anthemium Architecture V3 + Framework Layer (Improved)
+
+Автор: Роман Кузнецов  
+Проект: https://anthemium.com
+
+---
+
+### 0. Meta-Layer: Дифференцируемая нечеткая онтология с разреженностью
+- **Представление знаний**:
+  ```python
+  x = [mu_A, embed_text, embed_image, grad_theta, identity_AGI]
+  G_A(t)  # нечеткий граф отношений
+  ```
+- **Усовершенствование: адаптивная разреженность**
+  - Вводим порог \(\tau\), обучаемый вместе с \(\mu_A\), для обнуления слабых ребер:
+    ```python
+    G_sparse = {(i,j): mu_A[i,j] if mu_A[i,j] >= tau else 0}
+    ```
+  - Это снижает вычислительную нагрузку и сохраняет структуру важных связей.
+- **Функции**: формализация онтологических связей с градиентами, self-awareness через `identity_AGI` (обучаемый embedding).
+
+---
+
+### 1. A-Layer: Динамические знания и планирование гиперпараметров
+- **Обновление**:
+  ```python
+  mu_A[x,t+1] = sigmoid(alpha[t] * (mu_A[x,t] + \sum_{y} AnthemiumAttn(x,y) * mu_B[y,t]))
+  ```
+- **Усовершенствование: расписание гиперпараметров**
+  - Вводим curriculum-схему для \(\alpha[t]\):
+    - Warm-up: линейный рост от 0 до \(\alpha_{max}\) в первые T\_warmup шагов.
+    - Decay: экспоненциальное затухание после T\_peak.
+  ```python
+  if t < T_warmup:
+      alpha[t] = alpha_max * (t / T_warmup)
+  else:
+      alpha[t] = alpha_max * exp(-decay_rate * (t - T_warmup))
+  ```
+- **Роль**: кросс-модальное внимание интегрирует важнейшие внутренние/внешние данные.
+
+---
+
+### 2. B-Layer: Мультимодальное восприятие с квантованием неопределённости
+- **Оценка новизны**:
+  ```python
+  mu_B[y,t] = sigmoid(lambda_[t] * t - norm(embed_y - NN_phi(embed_y)))
+  ```
+- **Усовершенствование: передачa неопределённости**
+  - Используем Bayesian Autoencoder для оценки эпистемической неопределённости \(\sigma_y\).
+  - Итоговый сигнал новизны: \(mu_B[y,t] = f(recon_error, sigma_y)\).
+- **Роль**: фильтрация шумных данных + явная неопределённость для C-слоя.
+
+---
+
+### 3. C-Layer: Стохастический творческий механизм с Meta-RL для выбора режимов
+- **Генерация гипотез**:
+  ```python
+  mu_C[z,t] = min(mu_A[z,t], mu_B[z,t]) + epsilon * gumbel(0,1)
+  ```
+- **Усовершенствование: Meta-RL контроллер режимов**
+  - Небольшая политика \(\pi_\theta\) обучается выбирать между Discovery, Validation, Acceleration режимами.
+  - Награда: улучшение метрик качества гипотез (precision/recall).
+  ```python
+  mode_t = pi_theta(state_t)
+  ```
+- **Роль**: адаптивный творческий поиск и управление режимами.
+
+---
+
+### 4. N-Layer: Дифференцируемый рост и контроль сложности
+- **Функция роста**:
+  ```python
+  N[t] = \int mu_A[x,t] * mu_B[x,t] dx + eta * KL_divergence(G_sparse[t], G_sparse[t-1])
+  ```
+- **Усовершенствование: разреженное KL**
+  - Считаем дивергенцию только по сохраненным ребрам в `G_sparse`, что ускоряет вычисления.
+- **Роль**: баланс exploration/exploitation при ограниченных ресурсах.
+
+---
+
+### 5. Framework-Layer: Выбор и тюнинг симуляций
+
+#### 5.1 Классы симуляций
+- **StatisticalSim**: Monte Carlo, бутстрэп, UQ.
+- **DynamicalSim**: ODE/PDE.
+- **TopologyOpt**: топологическая оптимизация.
+- **AgentBasedSim**: агентные модели.
+- **NeuralSim**: GNN, multi-agent RL.
+- **HybridSim**: классика + ML.
+
+#### 5.2 Selector & AutoTune
+- **Selector**: учитывает TRL, вычисл. стоимость, точность, неопределённость; оперирует на графе гипотез.
+- **AutoTune**: эволюционный алгоритм + Bayesian optimization для гиперпараметров симуляторов.
+
+#### 5.3 Режимы работы с Meta-RL
+- **Discovery Mode**: генерация и первичная фильтрация (A→C).
+- **Validation Mode**: глубокая оценка при помощи Framework-Layer.
+- **Acceleration Mode**: MAML + AutoTune для быстрых адаптаций.
+- **Deployment Mode**: перевод в production-ready проекты через AGI Passport.
+
+---
+
+
+---
+
+## 6. Engine: Оркестратор исполнения
+
+Чтобы запустить и контролировать выполнение всех слоев Anthemium V3, предлагается следующий orchestrator:
+
+```python
+class AnthemiumEngine:
+    def __init__(self, config):
+        # Инициализация слоев и фреймворков
+        self.meta = MetaLayer(config.meta)
+        self.A    = ALayer(config.A)
+        self.B    = BLayer(config.B)
+        self.C    = CLayer(config.C)
+        self.N    = NLayer(config.N)
+        self.selector = Selector(config.selector)
+        self.autotune = AutoTune(config.autotune)
+        self.mode_policy = MetaRLController(config.meta_rl)
+
+    def run_step(self, t, external_data):
+        # 1. B-layer: обработка внешних данных
+        b_out = self.B.process(external_data, t)
+        # 2. A-layer: обновление внутренней онтологии
+        a_out = self.A.update(self.meta.G, b_out, t)
+        # 3. C-layer: генерация гипотез + выбор режима
+        mode = self.mode_policy.select_mode(self._state(t, a_out, b_out))
+        c_out = self.C.generate(a_out, b_out, mode, t)
+        # 4. N-layer: расчёт роста и регуляризация
+        self.N.grow(self.meta, a_out, b_out, t)
+        # 5. Framework-layer: отбор и симуляция
+        sim_class = self.selector.choose(c_out)
+        results = sim_class.run(c_out)
+        # 6. AutoTune: оптимизация гиперпараметров
+        self.autotune.step(sim_class, results)
+        # 7. Обновление мета-графа
+        self.meta.update_graph(a_out, c_out, t)
+        return results
+
+    def run(self, T, data_stream):
+        for t in range(T):
+            results = self.run_step(t, data_stream.next())
+            # логирование, чекпоинты
+            log(results, t)
+```
+
+### Запуск
+1. Подготовьте конфиг `config.yml` с параметрами для каждого слоя.  
+2. Установите зависимости: `pip install anthemium` (или из вашего репозитория).  
+3. Инициализируйте движок:
+   ```python
+   from anthemium import AnthemiumEngine, load_config
+   config = load_config('config.yml')
+   engine = AnthemiumEngine(config)
+   engine.run(T=10000, data_stream=myDataStream)
+   ```
+4. Мониторинг: подключите TensorBoard или MLflow для отслеживания μ-значений, KL, метрик симуляций.
+
+---
+
+© 2025 Roman Kuznetsov
